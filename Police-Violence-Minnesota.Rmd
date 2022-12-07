@@ -1,0 +1,220 @@
+---
+title: "Police Force Incidence in Minneapolis"
+author: "Alayna Johnson, Sanya Bains, and Saiido Noor"
+date: "December 9th, 2022"
+output:
+  bookdown::html_document2:
+    split_by: none
+    toc: yes
+    toc_depth: 3
+    toc_float:
+      toc_collapsed: true
+    number_sections: false
+---
+
+
+## Loading Packages
+```{r, message = FALSE,warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(openintro)     
+library(maps)          
+library(ggmap)         
+library(gplots)        
+library(RColorBrewer)  
+library(sf)            
+library(maptools)
+library(readr)
+library(plotly)
+library(ggthemes)
+library(gganimate)
+library(gifski)
+library(png) 
+
+```
+
+
+## Loading and Cleaning the Data
+```{r, message = FALSE}
+police_force <- read_csv("police_use_of_force.csv")
+
+precinct <- police_force %>% 
+  mutate(police_force, ResponseDate = as.POSIXct(ResponseDate, format = "%Y"))
+
+precinct$Year <- format(precinct$ResponseDate, format="%Y")
+
+police_force <- police_force %>%
+  mutate(TypeOfResistances = fct_recode(TypeOfResistance, "Commission of a Crime" = "Commission of Crime", "Commission of a Crime" = "commission of crime", "Commission of a Crime" = "COMMISSION OF CRIME", "Tensed" = "tensed", "Tensed" = "TENSED", "Assaulted Police Horse" = "Assaulting Police Horse", "Fled in a Vehicle" = "Fled in Vehicle", "Verbal Non-Compliance" = "verbal non-compliance", "Assaulted Police K9" = "Assaulting Police K9", "Unspecified" = "Other", "Unspecified" = "X"))
+```
+
+
+
+## Wrangling the Data
+```{r, message = FALSE}
+temporalData <- police_force %>% 
+  mutate(year = year(ResponseDate)) %>%
+  mutate(month = month(ResponseDate, label = TRUE)) %>%
+  filter(year %in% c(2019, 2020, 2021)) %>%
+  filter(ForceType %in% c("Bodily Force", "Taser", "Chemical Irritant"))
+
+resistance2019 <- temporalData %>%
+  filter(year == 2019) %>%
+  filter(TypeOfResistances %in% c("Tensed", "Unspecified", "Assaulted Officer", NA))%>%
+  group_by(TypeOfResistances, Race, year) %>%
+  count(total = n()) %>%
+  mutate(perc_resistance = (n/total)) %>%
+  arrange(desc(n))
+
+resistance2020 <- temporalData %>%
+  filter(year == 2020) %>%
+  filter(TypeOfResistances %in% c("Tensed", "Unspecified", "Fled on Foot", NA))%>%
+  group_by(TypeOfResistances, Race, year) %>%
+  count(total = n()) %>%
+  mutate(perc_resistance = (n/total)) %>%
+  arrange(desc(n))
+
+resistance2021 <- temporalData %>%
+  filter(year == 2021) %>%
+  group_by(TypeOfResistances, Race, year) %>%
+  count(total = n()) %>%
+  mutate(perc_resistance = (n/total)) %>%
+  arrange(desc(n))
+
+resistance <- resistance2019 %>%
+  full_join(resistance2020) %>%
+  full_join(resistance2021)
+
+forces <- temporalData %>%
+  group_by(ForceType, Race, year) %>%
+  summarise(total = n()) %>%
+  arrange(desc(Race))
+
+```
+
+
+## Visualizations
+
+### Police Calls
+```{r, message = FALSE}
+# calls over 2008-2022
+calls_overtime <- precinct %>% 
+  distinct(Precinct, TotalPrecinctCallsForYear, Year) %>% 
+  filter(Precinct %in% c("01","02","03", "04", "05")) %>% 
+  group_by(Year,Precinct) %>%
+  summarise(total_calls = sum(TotalPrecinctCallsForYear)) 
+
+calls_overtime %>% 
+  ggplot(aes( x = Year, y = total_calls, color = Precinct,group=Precinct)) +
+  geom_point( size = 2) +geom_line()+
+  theme_classic()  +
+  labs(title = "Total Police Calls From the Years 2008-2022", subtitle = "Shown by Year, Precinct", x = "Year", y = "Total") +
+  theme(legend.position = "top")
+
+```
+
+### Precinct Calls
+```{r}
+#comparing number of calls by precicnt
+police_calls <- precinct %>% 
+  distinct(Precinct, TotalPrecinctCallsForYear, Year, OBJECTID) %>% 
+  group_by(Precinct) %>%
+  filter(Year %in% c(2019, 2020, 2021)) %>%
+  summarise(total_calls = sum(TotalPrecinctCallsForYear))
+  
+
+police_calls <- filter(police_calls, Precinct %in% c("01","02","03", "04", "05")) %>% 
+    arrange(desc(total_calls))
+
+ggplot(police_calls, 
+       aes( x = Precinct,
+            y = total_calls/1000000,
+            fill = Precinct)) +
+  geom_bar(stat = "identity")    +
+  ylim(0, 125) +
+  geom_text(aes(label =signif(total_calls/1000000,2)),
+             vjust = -0.5) +
+   labs(title = "Total Number of 911 Calls Per Precinct in Minneapolis", subtitle = "From the Years 2019 until 2021", y = "Total Calls (in Millions)", x = "Precinct") +
+    theme_classic()  +
+  scale_x_discrete(labels = c('1','2','3', '4', '5')) +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+
+
+### Precint Calls Map
+```{r, message = FALSE, warning=FALSE}
+#mapping number of calls by precinct 2019-2021
+calls_map <- precinct %>% 
+  distinct(Precinct, TotalPrecinctCallsForYear, Year, OBJECTID, CenterLongitude, CenterLatitude) %>% 
+  group_by(Year, Precinct, CenterLongitude, CenterLatitude) %>% 
+  filter(Year %in% c("2019", "2020", "2021")) %>% 
+  filter(Precinct %in% c("01","02","03", "04", "05")) %>% ungroup() %>%
+  mutate(Year = as.numeric(Year))
+
+city <- get_stamenmap(
+  bbox = c(left =-93.3701, bottom = 44.9296, right =-93.1531, top =45.0117),
+  maptype = ("terrain-lines"),
+  zoom = 11
+)
+
+calls_map$group <- seq_len(nrow(calls_map))
+
+pp <- ggmap(city) +
+  geom_point(
+    data = calls_map, 
+    aes(x = CenterLongitude,
+        y = CenterLatitude, 
+       color = Precinct, group = group),
+    size = 2, alpha = .3
+    )  +  transition_states(Year) +
+  labs(x = ' ', 
+       y = '', title ="Minneapolis, MN: {closest_state}") +
+  theme(
+        legend.position = "right",
+        axis.text.x=element_blank(), 
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(),  
+        axis.ticks.y=element_blank() 
+        ) +
+  scale_color_brewer(palette = "Dark2")
+
+animate(pp,renderer = gifski_renderer()) 
+anim_save("map.gif")
+```
+
+
+
+### Type of Force
+```{r, fig.width = 9, fig.height=7}
+p <- forces %>%
+  ggplot(aes(x = ForceType, y = total, fill = Race)) +
+  geom_col(color = "black") +
+  facet_wrap(~year) +
+  labs(x = "Type of Force", y = "Total Number of Cases", title = "MPD Top 3 Forms of Violence and Its Correlation With Race From 2019-2021") +
+  scale_fill_brewer(palette =  "RdYlBu") +
+  theme_minimal()
+
+ggplotly(p)
+```
+
+
+### Resistance Type
+```{r, fig.width = 9, fig.height=8}
+
+r <- resistance %>%
+  ggplot(aes(x = TypeOfResistances, y = n, fill = Race)) +
+  geom_col(color = "black") +
+  facet_grid(.~year,  scales="free_x")+
+  labs(y = "Times Resistance Used", x = "Type of Resistance", title = "How Many Times Each Resistance Type Was Used against Police", subtitle = "From 2019 to 2021") +
+  scale_fill_brewer(palette = "BrBG") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplotly(r)
+
+```
+
+
+
+
