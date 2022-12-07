@@ -1,6 +1,6 @@
 # Policing Violence Post George Floyd Murder
 
-Simple overview of use/purpose.
+The focus of our research is to see how violence committed by the Minneapolis Police Department has changed since George Floyd’s murder. We narrowed our data to be from the years 2019-2021. We looked at the amount of 911 calls that happened in each precinct, then looked at the top 3 forms of force used by police officers and cross referenced it with race, and finally looked at the types of resistance that was exhibited by the victim and cross referenced it with race as well.
 
 ## Description
 
