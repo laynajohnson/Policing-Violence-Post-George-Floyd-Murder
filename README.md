@@ -14,8 +14,8 @@ The focus of our research is to see how violence committed by the Minneapolis Po
 
 ### Installing
 
-Download R Studio here: https://posit.co/download/rstudio-desktop/
-Download R here: https://www.r-project.org/
+* Download R Studio here: https://posit.co/download/rstudio-desktop/
+* Download R here: https://www.r-project.org/
 
 ## Authors
 
