@@ -1,0 +1,243 @@
+---
+title: "ACAB - Looking at Police Violence Post George Floyd Murder" 
+author: "Written By: Alayna Johnson, Sanya Bains, and Saiido Noor"
+output: 
+  html_document:
+    theme: journal
+---
+
+
+```{r setup, include=FALSE}
+
+library(tidyverse)     # for data cleaning and plotting
+library(lubridate)     # for date manipulation
+library(openintro)     # for the abbr2state() function
+library(maps)          # for map data
+library(ggmap)         # for mapping points on maps
+library(gplots)        # for col2hex() function
+library(RColorBrewer)  # for color palettes
+library(sf)            # for working with spatial data
+library(leaflet)       # for highly customizable mapping
+library(ggthemes)      # for more themes (including theme_map())
+library(maptools)
+library(readr)
+library(plotly)
+library(gganimate)
+library(gifski)
+library(png)
+```
+
+```{css, echo=FALSE}
+
+h2 {
+  font-size: 32px;
+  color: cornflowerblue;
+}
+```
+
+```{r,echo=FALSE, message = FALSE}
+police_force <- read_csv("police_use_of_force.csv")
+
+precinct <- police_force %>% 
+  mutate(police_force, ResponseDate = as.POSIXct(ResponseDate, format = "%Y"))
+
+precinct$Year <- format(precinct$ResponseDate, format="%Y")
+
+police_force <- police_force %>%
+  mutate(TypeOfResistances = fct_recode(TypeOfResistance, "Commission of a Crime" = "Commission of Crime", "Commission of a Crime" = "commission of crime", "Commission of a Crime" = "COMMISSION OF CRIME", "Tensed" = "tensed", "Tensed" = "TENSED", "Assaulted Police Horse" = "Assaulting Police Horse", "Fled in a Vehicle" = "Fled in Vehicle", "Verbal Non-Compliance" = "verbal non-compliance", "Assaulted Police K9" = "Assaulting Police K9", "Unspecified" = "Other", "Unspecified" = "X"))
+```
+
+```{r, echo=FALSE, message = FALSE,}
+temporalData <- police_force %>% 
+  mutate(year = year(ResponseDate)) %>%
+  mutate(month = month(ResponseDate, label = TRUE)) %>%
+  filter(year %in% c(2019, 2020, 2021)) %>%
+  filter(ForceType %in% c("Bodily Force", "Taser", "Chemical Irritant"))
+
+resistance2019 <- temporalData %>%
+  filter(year == 2019) %>%
+  filter(TypeOfResistances %in% c("Tensed", "Unspecified", "Assaulted Officer", NA))%>%
+  group_by(TypeOfResistances, Race, year) %>%
+  count(total = n()) %>%
+  mutate(perc_resistance = (n/total)) %>%
+  arrange(desc(n))
+
+resistance2020 <- temporalData %>%
+  filter(year == 2020) %>%
+  filter(TypeOfResistances %in% c("Tensed", "Unspecified", "Fled on Foot", NA))%>%
+  group_by(TypeOfResistances, Race, year) %>%
+  count(total = n()) %>%
+  mutate(perc_resistance = (n/total)) %>%
+  arrange(desc(n))
+
+resistance2021 <- temporalData %>%
+  filter(year == 2021) %>%
+  group_by(TypeOfResistances, Race, year) %>%
+  count(total = n()) %>%
+  mutate(perc_resistance = (n/total)) %>%
+  arrange(desc(n))
+
+resistance <- resistance2019 %>%
+  full_join(resistance2020) %>%
+  full_join(resistance2021)
+
+forces <- temporalData %>%
+  group_by(ForceType, Race, year) %>%
+  summarise(total = n()) %>%
+  arrange(desc(Race))
+```
+
+
+## Background
+
+In April of this year, the Minneapolis Department of Human Rights released a report investigating alleged discrimination by the Minneapolis Police Department (MPD) in the days that followed the murder of George Floyd by former MPD officer Derek Chauvin. This investigation was prompted by the unmistakable misuse of police force that resulted in the tragic murder of George Floyd. The disgusting actions that took place that day were witnessed by thousands through social media and news outlets, sparking outrage. Through this investigation, we learn this situation was not an isolated occurrence. Investigators concluded that there are racial discrepancies in how MPD officers "use force, stop, search, arrest, and cite people of color, especially Black individuals, compared to how they treat white individuals in comparable circumstances." Additionally, the MPD “maintains an organizational culture in which officers consistently use racist, misogynistic, and otherwise disrespectful language." This is where the motivation for our project originates. We wanted to do our own study into police use of force and the various ways this has historically played out after witnessing firsthand the protests that swept the city following the exposure of the MPD in the case of George Floyd.
+
+
+## Police Presence in Precincts
+
+To establish context, we want to provide information on how the MPD governs the city. In total, there are five precincts, each covering various non-overlapping neighborhoods. Precinct 1 only services Downtown Minneapolis, covering the least amount of area. The 2nd Precinct responds mainly to calls from NE Minneapolis, covering more area than the 1st Precinct. Patrolling one of the largest areas of the city, the 3rd Precinct of Minneapolis services mainly SE Minneapolis. Precinct 4’s services over a smaller area, mostly around the northwest part of the city. Lastly, The 5th Precinct borders SW Minneapolis, covering a large number of communities, but second to the amount of area covered by the 3rd Precinct. To sum up, in order of largest to smallest area covered, we have Precinct 3, Precinct 5, Precinct 2, Precinct 4, and Precinct 1.
+
+```{r, message = FALSE, echo=FALSE, warning=FALSE}
+#mapping number of calls by precinct 2019-2021
+calls_map <- precinct %>% 
+  distinct(Precinct, TotalPrecinctCallsForYear, Year, OBJECTID, CenterLongitude, CenterLatitude) %>% 
+  group_by(Year, Precinct, CenterLongitude, CenterLatitude) %>% 
+  filter(Year %in% c("2019", "2020", "2021")) %>% 
+  filter(Precinct %in% c("01","02","03", "04", "05")) %>% ungroup() %>%
+  mutate(Year = as.numeric(Year))
+
+city <- get_stamenmap(
+  bbox = c(left =-93.3701, bottom = 44.9296, right =-93.1531, top =45.0117),
+  maptype = ("terrain-lines"),
+  zoom = 11
+)
+
+calls_map$group <- seq_len(nrow(calls_map))
+
+pp <- ggmap(city) +
+  geom_point(
+    data = calls_map, 
+    aes(x = CenterLongitude,
+        y = CenterLatitude, 
+       color = Precinct, group = group),
+    size = 2, alpha = .3
+    )  +  transition_states(Year) +
+  labs(x = ' ', 
+       y = '', title ="Minneapolis, MN: {closest_state}") +
+  theme(
+        legend.position = "right",
+        axis.text.x=element_blank(), 
+        axis.ticks.x=element_blank(),
+        axis.text.y=element_blank(),  
+        axis.ticks.y=element_blank() 
+        ) +
+  scale_color_brewer(palette = "Dark2")
+
+animate(pp,renderer = gifski_renderer()) 
+anim_save("map.gif")
+```
+
+We can quantify how heavy the police presence is by calculating the total number of calls a precinct has responded to. To better comprehend this, we produced a couple of visualizations. For a temporal analysis, we created a linear plot illustrating the total number of phone calls a precinct received and responded to from 2008 - 2022. The preliminary assumption is that precincts that service larger areas will likely have more calls. This is because one would expect that with more land to cover, there could be more opportunities for spread-out police response. 
+
+Precinct 4, which covers the second least amount of area, has the highest number of calls with a total of about 710 million. The likelihood of high police activity in the neighborhoods under that jurisdiction is more compared to the other precincts. This came as a surprise since Precinct 3 services a larger part of Minneapolis but has responded to about half that amount. From this, we can conclude while there is a strong police presence in the areas serviced by Precinct 3, it is not to the extent of Precinct 4.
+ 
+
+```{r, message = FALSE, echo = FALSE,fig.width=10}
+
+calls_overtime <- precinct %>% 
+  distinct(Precinct, TotalPrecinctCallsForYear, Year) %>% 
+  filter(Precinct %in% c("01","02","03", "04", "05")) %>% 
+  group_by(Year,Precinct) %>%
+  summarise(total_calls = sum(TotalPrecinctCallsForYear)) 
+
+calls_overtime %>% 
+  ggplot(aes( x = Year, y = total_calls, color = Precinct,group=Precinct)) +
+  geom_point( size = 2) +geom_line()+
+  theme_classic()  +
+  labs(title = "Total Police Calls From the Years 2008-2022", subtitle = "Shown by Year, Precinct", x = "Year", y = "Total") +
+  theme(legend.position = "top")
+
+```
+
+Finally, we wanted to see how this would look specifically in the years before and following the George Floyd murder. We chose to do this by creating a bar plot. Again, the 4th precinct is found to have a high record of calls, implying heavy police presence in those neighborhoods. However, Precinct 1 has been found to have the highest total in this time range. This differs from the observations between the years 2008 - 2022, where precinct 4 was found to have the largest total. 
+
+```{r, echo = FALSE, fig.width=10}
+
+police_calls <- precinct %>% 
+  distinct(Precinct, TotalPrecinctCallsForYear, Year, OBJECTID) %>% 
+  group_by(Precinct) %>%
+  filter(Year %in% c(2019, 2020, 2021)) %>%
+  summarise(total_calls = sum(TotalPrecinctCallsForYear))
+  
+
+police_calls <- filter(police_calls, Precinct %in% c("01","02","03", "04", "05")) %>% 
+    arrange(desc(total_calls))
+
+ggplot(police_calls, 
+       aes( x = Precinct,
+            y = total_calls/1000000,
+            fill = Precinct)) +
+  geom_bar(stat = "identity")    +
+  ylim(0, 125) +
+  geom_text(aes(label =signif(total_calls/1000000,2)),
+             vjust = -0.5) +
+   labs(title = "Total Number of 911 Calls Per Precinct in Minneapolis", subtitle = "From the Years 2008 until 2022", y = "Total Calls (in Millions)", x = "Precinct") +
+    theme_classic()  +
+  scale_x_discrete(labels = c('1','2','3', '4', '5')) +
+  theme(legend.position = "none") +
+  scale_fill_brewer(palette = "Dark2")
+```
+
+
+## Types of Forces Used
+
+The Minneapolis police department has become notorious for its brutal use of force following the murder of George Floyd. Unfortunately, George Floyd is not the only case of horrific violence from the MPD. The dataset we explored showed that there have been over 8000 reported cases involving police using force. When looking at the types of force the police used, the top three categories were “Bodily Force”, “Chemical Irritant”, and “Taser”. With further analysis, we discovered both the bodily force and taser categories have a significant increase from 2019 to 2021. This means the increase occurred even after George Floyd’s murder. Upon this realization, we decided to look at one main question, which race is being targeted the most by the top three police use of force? 
+When cross-referencing our data with race we see that the Black population in Minneapolis is experiencing the most violence against them. Additionally, it is observed that the number of cases of bodily force and tasers against Black people increased post-George Floyd. This leads to questions such as why are Black people being targeted more and why have cases of bodily force specifically been increasing after the upset that was caused by the brutal murder of George Floyd? 
+
+
+```{r pressure, echo=FALSE, fig.width=10}
+p <- forces %>% 
+  ggplot(aes(x = ForceType, y = total, fill = Race)) +
+  geom_col(color = "black") +
+  facet_wrap(~year) + 
+  labs(x = "Type of Force", y = "Total Number of Cases", title = "MPD Top 3 Forms of Violence and Its Correlation With Race From 2019-2021") +
+  scale_fill_brewer(palette =  "RdYlBu") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45))
+
+ggplotly(p)
+```
+
+
+## Resistance Against Police
+
+Finally, we worked on a visual analysis of the resistance type used by the victim of police brutality. Keeping within the same top three police force categories(bodily force, chemical irritant, and taser), we were wondering what forms of resistance made the officer react with unnecessary force. In the years 2019 to 2021, we can see some trends in the kinds of resistance used.
+
+From this graph, we can see the most common types of resistance in our three years of interest. It could be considered probable that an officer would respond with violence if they were physically assaulted, so it is not surprising that this graph includes this value. What is interesting to consider is how often we see the NA values for each year. NA could mean a few things in this data. One could be that the data was not recorded due to a simple mistake. Or more likely that there was no resistance on the part of the citizen and the police used violence anyway. Looking at the counts for each year, there were many more incidences of NA values of resistance in 2021 than in any of the other years. Why could this be?
+
+Additionally, this graph considers the race of the victim. Black individuals make up most of this data, as we saw in the previous graph. This brings me to the question of the meaning behind the value “tensed” in our data. This could mean that the citizen was being detained or something and the officer simply felt them tense and thought it would be a good idea to use force. Here there is also a larger portion of the data that were identified as Black individuals. Could this be because police are systematically trained to see Black individuals as “violent” or “criminal”? Or simply because many officers are White and were raised to think that way regardless of training? 
+
+```{r, echo=FALSE, fig.width=10}
+
+r <- resistance %>%
+  ggplot(aes(x = TypeOfResistances, y = n, fill = Race)) +
+  geom_col(color = "black") +
+  facet_grid(.~year,  scales="free_x")+
+  labs(y = "Times Resistance Used", x = "Type of Resistance", title = "How Many Times Each Resistance Type Was Used against Police", subtitle = "From 2019 to 2021") +
+  scale_fill_brewer(palette = "BrBG") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90))
+
+ggplotly(r)
+
+```
+
+
+## Future Research
+Our analysis, which coincides with the results of the Minneapolis Department of Human Rights, demonstrates the MPD's abuse of the BIPOC community, notably Black people. First we established where a heavy police presence is expected in the city. Then, we found that police were typically misusing force by either employing unnecessary body force, engaging chemical irritants, or through tasing. With this in mind, we looked into what could have prompted such reactions, and found that “non applicable” is the main reason. It would be useful to investigate the absence of results and compare if they vary by precinct.
+
+It is also important to note George Floyd was murdered in the third precinct, however we only mentioned Precinct 4 as it has the heaviest police presence with the smallest area covered. Our curiosities lied in the question of how police of Minneapolis acted before, during, and after the murder of George Floyd which sparked an increase in Black Lives Matter protests throughout the city. Given additional time, our dataset and other relevant data combined can be used for a variety of potential analyses. For instance, to see if we could understand the uniqueness of Geoge Floyd’s situation, or if it simply acquired traction due to its widespread publicity. It is important to utilize and take advantage of the momentum of this unfortunate event to find potential answers. Further research is needed in order to find significant connections that can assist both police and citizens in comprehending the complexities of the causes of police violence.
+
+
+
+
