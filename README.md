@@ -20,9 +20,9 @@ The focus of our research is to see how violence committed by the Minneapolis Po
 
 ## Authors
 
-Alayna Johnson
-Sanya Bains
-Saiido Noor
+* Alayna Johnson
+* Sanya Bains
+* Saiido Noor
 
 ## Version History
 
