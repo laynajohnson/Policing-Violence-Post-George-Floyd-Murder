@@ -16,18 +16,10 @@ The focus of our research is to see how violence committed by the Minneapolis Po
 
 * Download R Studio here: https://posit.co/download/rstudio-desktop/
 * Download R here: https://www.r-project.org/
-* Download CSV file
+* Download CSV file here: https://www.kaggle.com/datasets/paultimothymooney/minneapolis-police-stops-and-police-violence?select=police_stop_data.csv
 
 ## Authors
 
 * Alayna Johnson
 * Sanya Bains
 * Saiido Noor
-
-## Version History
-
-* 0.2
-    * Various bug fixes and optimizations
-    * See [commit change]() or See [release history]()
-* 0.1
-    * Initial Release
