@@ -1,5 +1,5 @@
 # Policing Violence Post George Floyd Murder
-The purpose of this project is to examine the use of force by the Minneapolis Police Department (MPD) in Minneapolis, Minnestoa. 
+The purpose of this project is to examine the use of force by the Minneapolis Police Department (MPD) in Minneapolis, Minnesota. Project completed Fall 2022.
 
 ## Description
 
